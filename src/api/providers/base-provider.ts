@@ -1,4 +1,5 @@
 import { Anthropic } from "@anthropic-ai/sdk"
+import * as vscode from "vscode"
 
 import type { ModelInfo } from "@roo-code/types"
 
@@ -6,6 +7,7 @@ import type { ApiHandler, ApiHandlerCreateMessageMetadata } from "../index"
 import { ApiStream } from "../transform/stream"
 import { countTokens } from "../../utils/countTokens"
 import { isMcpTool } from "../../utils/mcp-name"
+import { Package } from "../../shared/package"
 
 /**
  * Base class for API providers that implements common functionality.
@@ -22,11 +24,21 @@ export abstract class BaseProvider implements ApiHandler {
 	/**
 	 * Converts an array of tools to be compatible with OpenAI's strict mode.
 	 * Filters for function tools, applies schema conversion to their parameters,
-	 * and ensures all tools have consistent strict: true values.
+	 * and ensures all tools have consistent strict values based on configuration.
 	 */
 	protected convertToolsForOpenAI(tools: any[] | undefined): any[] | undefined {
 		if (!tools) {
 			return undefined
+		}
+
+		// Read the MCP strict mode setting
+		let mcpStrictMode = false
+		try {
+			const config = vscode.workspace.getConfiguration(Package.name)
+			mcpStrictMode = config.get<boolean>("mcpStrictMode", false)
+		} catch (error) {
+			// Fallback to false if configuration can't be read
+			mcpStrictMode = false
 		}
 
 		return tools.map((tool) => {
@@ -34,18 +46,19 @@ export abstract class BaseProvider implements ApiHandler {
 				return tool
 			}
 
-			// MCP tools use the 'mcp--' prefix - disable strict mode for them
-			// to preserve optional parameters from the MCP server schema
 			const isMcp = isMcpTool(tool.function.name)
+
+			// Use strict mode for all non-MCP tools, and for MCP tools only if setting is enabled
+			const useStrict = !isMcp || mcpStrictMode
 
 			return {
 				...tool,
 				function: {
 					...tool.function,
-					strict: !isMcp,
-					parameters: isMcp
-						? tool.function.parameters
-						: this.convertToolSchemaForOpenAI(tool.function.parameters),
+					strict: useStrict,
+					parameters: useStrict
+						? this.convertToolSchemaForOpenAI(tool.function.parameters)
+						: tool.function.parameters,
 				},
 			}
 		})

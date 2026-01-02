@@ -411,6 +411,11 @@
 					"type": "boolean",
 					"default": false,
 					"description": "%settings.debug.description%"
+				},
+				"roo-cline.mcpStrictMode": {
+					"type": "boolean",
+					"default": false,
+					"description": "%settings.mcpStrictMode.description%"
 				}
 			}
 		}
